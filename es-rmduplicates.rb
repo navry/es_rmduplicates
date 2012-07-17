@@ -16,11 +16,11 @@ def printHelp
 
 Usage: #{__FILE__} <URL>/<INDEX> <ARGUMENTS>
 
-Required arguments for configure JSON: 
-       -i   json way to id (_id)
-       -t   json way to type (_type)
-       -d   json way to date (_source/date)
-       -c   json way to duplicite content (_source/content)
+Required arguments: 
+       -i   path to id (_id)
+       -t   path to type (_type)
+       -d   path to date (_source/date)
+       -c   path to duplicite content (_source/content)
 
 Examples:
        #{__FILE__} http://localhost:9200/database -i _id -t _type \\
@@ -29,7 +29,7 @@ Examples:
        #{__FILE__} http://localhost:9200/database -i _id -t _type \\
        -d _source/date -c _source/content 2>&1 /dev/null for silent mode
 
-       For first example will be show counter on stderr\n"
+       In first example there will be counter displayed on stderr\n"
 end
 
 
@@ -38,7 +38,7 @@ if ARGV[0]
         printHelp
         exit 0
     elsif ARGV[0] =~ /^-/
-        puts "#{__FILE__}: illegal parameter,\n use #{__FILE__} -h for help"
+        puts "#{__FILE__}: unknown parameter,\n use #{__FILE__} -h for help"
         exit 1
     end
 else
