@@ -142,12 +142,10 @@ def trip (item, way)
     return item
 end
 
-
-
 # LOAD DATABASE __START__
 
-#while true do  
-(1..2).each do #DEBUG for 2000 tests
+while true do  
+# (1..2).each do #DEBUG for 2000 tests
     
     predata = retried_request(:get, "#{urlS}/_search/scroll?scroll=10m&scroll_id=#{scroll_id}") # Get
     predata = Yajl::Parser.parse predata
