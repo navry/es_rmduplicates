@@ -11,15 +11,23 @@ STDOUT.sync = true
 
 # PARAMETERS __START__
 
-def help
-     puts "Script to search and remove duplicites dates from ES.
+def printHelp
+     STDERR.puts "Script to search and remove duplicites dates from ES.
 
-Usage:
-       #{__FILE__} [http://source_url/]<index>
+Usage: #{__FILE__} <URL>/<INDEX> <ARGUMENTS>
+
+Required arguments for configure JSON: 
+       -i   json way to id (_id)
+       -t   json way to type (_type)
+       -d   json way to date (_source/date)
+       -c   json way to duplicite content (_source/content)
 
 Examples:
-       #{__FILE__} http://localhost:9200/database > output.txt #(the best)
-       #{__FILE__} http://localhost:9200/database 2>&1 /dev/null
+       #{__FILE__} http://localhost:9200/database -i _id -t _type \\
+       -d _source/date -c _source/content > output.txt #(the best)
+
+       #{__FILE__} http://localhost:9200/database -i _id -t _type \\
+       -d _source/date -c _source/content 2>&1 /dev/null for silent mode
 
        For first example will be show counter on stderr\n"
 end
@@ -27,23 +35,33 @@ end
 
 if ARGV[0]
     if ARGV[0] =~ /^-(?:h|-?help)$/
-        help
+        printHelp
         exit 0
     elsif ARGV[0] =~ /^-/
         puts "#{__FILE__}: illegal parameter,\n use #{__FILE__} -h for help"
         exit 1
     end
 else
-    help
+    printHelp
     exit 1
 end
 
 
-param = nil
+param,param_content,param_date,param_type,param_id = nil,nil,nil,nil,nil
 
 while ARGV[0]
     case arg = ARGV.shift
-    when '-h' then help=true
+    when '-h' then 
+        printHelp
+        exit 0
+    when '-c' then
+        param_content = ARGV.shift
+    when '-d' then
+        param_date = ARGV.shift
+    when '-t' then
+        param_type = ARGV.shift
+    when '-i' then
+        param_id = ARGV.shift
     else
         !param ? (param = arg) : 
             raise("Unexpected parameter '#{arg}'. Use '-h' for help.")
@@ -52,11 +70,18 @@ end
 
 urlS, index = '', ''
 
+
 if param =~ %r{^http://(.*?)/(.*?)$}
     urlS.replace $1
     index.replace $2
 else
-    help
+    STDERR.puts "Url was not correct specified. Use '-h' for help"
+    exit 1
+end
+
+if param_content == nil || param_date == nil ||
+    param_type == nil || param_id == nil then
+    STDERR.puts "Arguments were not fully specified. Use '-h' for help"
     exit 1
 end
 
@@ -66,7 +91,7 @@ STDERR.print "Url:", urlS, " index:", index, "\n"
 
 def retried_request method, url, data=nil
     """
-    Function for sending requirement on ES
+    Function for sending query to ES
     """
     while true
         begin
@@ -85,7 +110,7 @@ end
 
 def tm_len l
     """
-    Function for converd time to legible form
+    Function for converting time to legible form
     """
     t = []
     t.push l/86400; l %= 86400
@@ -109,11 +134,20 @@ scan = Yajl::Parser.parse scan
 scroll_id = scan['_scroll_id']
 total = scan['hits']['total']
 
+def trip (item, way)
+    for each in way.split('/') do
+        item = item[each]
+    end
+
+    return item
+end
+
+
 
 # LOAD DATABASE __START__
 
-while true do  
-#(1..2).each do #DEBUG
+#while true do  
+(1..2).each do #DEBUG for 2000 tests
     
     predata = retried_request(:get, "#{urlS}/_search/scroll?scroll=10m&scroll_id=#{scroll_id}") # Get
     predata = Yajl::Parser.parse predata
@@ -121,13 +155,13 @@ while true do
     scroll_id = predata['_scroll_id']
 
     predata['hits']['hits'].each{|doc|
-        
-        sha1 = Digest::SHA1.hexdigest(doc['_source']['content']) # calculate hash
+        sha1 = Digest::SHA1.hexdigest(trip(doc,param_content)) # calculate hash
         data[sha1].push(doc) # Add new document to hash
-        data[sha1][0]['_source']['content'] = nil # Delete countent dates (save ram)
-
         done += 1 # COUNTER
+
+        #print data[sha1][0]['_source']['content'] # DEBUG
     }
+
 
     eta = total * (Time.now - t) / done # COUNTER
     STDERR.printf "  LOAD:  %u/%u (%.1f%%) done in %s, E.T.A.: %s.\r", # COUNTER
@@ -149,7 +183,7 @@ data.each do |arr|
         count += 1 # DEBUG
         arr[1].sort_by! { |item| 
         # sort via Date/Time
-            item['_source']['date']
+            trip(item,param_date)
         }
         
         print count,"#",arr[1][0],"\n" # DEBUG
@@ -158,15 +192,19 @@ data.each do |arr|
 
         arr[1].each do |item|
         # Remove remaining documents in array
-            print count,"#",arr[0],"#",item['_id'],"#",item['_source']['date'],"\n" # DEBUG
-            RestClient.send(:delete, "#{urlS}/#{index}/#{item['_type']}/#{item['_id']}")
+            id = trip(item,param_id)
+            date = trip(item,param_date)
+            type = trip(item,param_type)
+
+            print count,"#",arr[0],"#",id,"#",date,"\n" # DEBUG
+            RestClient.send(:delete, "#{urlS}/#{index}/#{type}/#{id}")
         end
     end
 
     done += 1 # COUNER
 
     eta = total * (Time.now - t) / done # COUNTER
-    STDERR.printf "  DELETE  %u/%u (%.1f%%) done in %s, E.T.A.: %s.\r", # COUNTER
+    STDERR.printf "DELETE:  %u/%u (%.1f%%) done in %s, E.T.A.: %s.\r", # COUNTER
         done, total, 100.0 * done / total, tm_len(Time.now - t), t + eta # COUNTER
 end
 
