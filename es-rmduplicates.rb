@@ -144,15 +144,31 @@ end
 
 # LOAD DATABASE __START__
 
+# Test to existed JSON paths
+predata = retried_request(:get, "#{urlS}/_search/scroll?scroll=10m&scroll_id=#{scroll_id}") # Get
+predata = Yajl::Parser.parse predata
+[param_content,param_date,param_type,param_id].each do |param|
+    begin
+        if trip(predata['hits']['hits'][0], param) == nil then
+            STDERR.puts "ERROR: Invalid JSON path: #{param}"
+            exit 1
+        end
+    rescue NoMethodError
+        STDERR.puts "ERROR: Invalid JSON path: #{param}"
+        exit 1
+    end
+end
+
+
 while true do  
-# (1..2).each do #DEBUG for 2000 tests
+#(7..10).each do #DEBUG for 2000 tests
     
     predata = retried_request(:get, "#{urlS}/_search/scroll?scroll=10m&scroll_id=#{scroll_id}") # Get
     predata = Yajl::Parser.parse predata
     break if predata['hits']['hits'].empty?
     scroll_id = predata['_scroll_id']
 
-    predata['hits']['hits'].each{|doc|
+    predata['hits']['hits'].each{ | doc |
         sha1 = Digest::SHA1.hexdigest(trip(doc,param_content)) # calculate hash
         data[sha1].push(doc) # Add new document to hash
         done += 1 # COUNTER
@@ -165,7 +181,6 @@ while true do
     STDERR.printf "  LOAD:  %u/%u (%.1f%%) done in %s, E.T.A.: %s.\r", # COUNTER
         done, total, 100.0 * done / total, tm_len(Time.now - t), t + eta # COUNTER
 end
-
 # LOAD DATABASE __END__
 
 STDERR.puts # FORMATING OUTPUT
@@ -182,7 +197,7 @@ data.each do |arr|
         arr[1].sort_by! { |item| 
         # sort via Date/Time
             trip(item,param_date)
-        }
+        }.reverse!
         
         print count,"#",arr[1][0],"\n" # DEBUG
 
@@ -192,6 +207,7 @@ data.each do |arr|
         # Remove remaining documents in array
             id = trip(item,param_id)
             date = trip(item,param_date)
+            date = trip(item,'hovno')
             type = trip(item,param_type)
 
             print count,"#",arr[0],"#",id,"#",date,"\n" # DEBUG
