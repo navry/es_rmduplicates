@@ -207,7 +207,6 @@ data.each do |arr|
         # Remove remaining documents in array
             id = trip(item,param_id)
             date = trip(item,param_date)
-            date = trip(item,'hovno')
             type = trip(item,param_type)
 
             print count,"#",arr[0],"#",id,"#",date,"\n" # DEBUG
